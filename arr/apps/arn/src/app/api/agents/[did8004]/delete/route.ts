@@ -36,6 +36,7 @@ export async function DELETE(
               chainId: parsed.chainId,
             });
           };
+          
 
     // Delete agent using admin API (transfers to address(0))
     const result = await deleteFn(getDidParam(params));
