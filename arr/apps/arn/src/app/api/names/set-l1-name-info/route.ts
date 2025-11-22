@@ -3,9 +3,25 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareL1AgentNameInfoCalls } from '@agentic-trust/core/server';
 
+interface SetNameInfoBody {
+  agentName: string;
+  orgName: string;
+  agentAddress: string;
+  agentUrl?: string;
+  agentDescription?: string;
+  chainId?: number;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { agentName, orgName, agentAddress, agentUrl, agentDescription, chainId } = await request.json();
+    const {
+      agentName,
+      orgName,
+      agentAddress,
+      agentUrl,
+      agentDescription,
+      chainId,
+    } = (await request.json()) as SetNameInfoBody;
 
     if (!agentName || !orgName || !agentAddress) {
       return NextResponse.json(
@@ -14,7 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const params: any = {
+    const params: SetNameInfoBody = {
       agentAddress,
       orgName,
       agentName,

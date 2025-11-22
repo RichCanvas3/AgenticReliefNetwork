@@ -112,19 +112,19 @@ importers:
         version: 2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
     devDependencies:
       '@types/node':
-        specifier: ^20.14.0
+        specifier: ^20.0.0
         version: 20.19.25
       '@types/react':
-        specifier: ^18.3.0
+        specifier: ^18.0.0
         version: 18.3.27
       '@types/react-dom':
-        specifier: ^18.3.0
+        specifier: ^18.0.0
         version: 18.3.7(@types/react@18.3.27)
       eslint:
-        specifier: ^8.57.0
-        version: 8.57.1
+        specifier: ^9.0.0
+        version: 9.39.1
       typescript:
-        specifier: ^5.5.0
+        specifier: ^5.6.0
         version: 5.9.3
 
   packages/core:

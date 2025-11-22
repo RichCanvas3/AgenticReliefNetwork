@@ -2,7 +2,23 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-async function queryGraphQL(query: string, variables: any = {}) {
+type GraphQLVariables = Record<string, unknown>;
+
+interface AgentRecord {
+  chainId: number;
+  agentId: string;
+  agentName?: string | null;
+  description?: string | null;
+  image?: string | null;
+  metadataURI?: string | null;
+  ensEndpoint?: string | null;
+  createdAtTime: number;
+}
+
+async function queryGraphQL(
+  query: string,
+  variables: GraphQLVariables = {},
+): Promise<unknown> {
   // Get GraphQL endpoint URL from environment at runtime
   const GRAPHQL_URL = process.env.AGENTIC_TRUST_DISCOVERY_URL + '/graphql'
   
@@ -37,15 +53,20 @@ async function queryGraphQL(query: string, variables: any = {}) {
       return null;
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as {
+      data?: unknown;
+      errors?: unknown;
+    };
     if (data.errors) {
       console.error('GraphQL errors:', data.errors);
       return null;
     }
 
     return data.data;
-  } catch (error: any) {
-    console.error('GraphQL fetch error:', error?.message || error);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : JSON.stringify(error);
+    console.error('GraphQL fetch error:', message);
     return null;
   }
 }
@@ -68,7 +89,8 @@ export async function GET() {
       }
     `;
 
-    const data = await queryGraphQL(query);
+    const rawData = await queryGraphQL(query);
+    const data = rawData as { agents?: AgentRecord[] } | null;
 
     if (!data || !data.agents) {
       // Return empty stats if GraphQL is not available
@@ -86,12 +108,12 @@ export async function GET() {
       });
     }
 
-    const agents = data.agents || [];
+    const agents: AgentRecord[] = data.agents || [];
     const last24Hours = Math.floor(Date.now() / 1000) - 86400;
 
     // Group by chain
-    const chainGroups: Record<number, typeof agents> = {};
-    agents.forEach((agent: any) => {
+    const chainGroups: Record<number, AgentRecord[]> = {};
+    agents.forEach((agent) => {
       if (!chainGroups[agent.chainId]) {
         chainGroups[agent.chainId] = [];
       }
@@ -108,12 +130,14 @@ export async function GET() {
     };
 
     // Calculate stats per chain
-    const chains = Object.keys(chainGroups).map(chainIdStr => {
+    const chains = Object.keys(chainGroups).map((chainIdStr) => {
       const chainId = parseInt(chainIdStr);
       const chainAgents = chainGroups[chainId];
-      const withMetadata = chainAgents.filter((a: any) => a.metadataURI).length;
-      const withENS = chainAgents.filter((a: any) => a.ensEndpoint).length;
-      const recent = chainAgents.filter((a: any) => a.createdAtTime > last24Hours).length;
+      const withMetadata = chainAgents.filter((a) => a.metadataURI).length;
+      const withENS = chainAgents.filter((a) => a.ensEndpoint).length;
+      const recent = chainAgents.filter(
+        (a) => a.createdAtTime > last24Hours,
+      ).length;
 
       return {
         chainId,
@@ -128,9 +152,9 @@ export async function GET() {
     });
 
     // Get the highest agentId from each chain
-    const topAgentsByChain: Record<number, any> = {};
+    const topAgentsByChain: Record<number, AgentRecord> = {};
     const maxAgentIds: Record<number, number> = {};
-    agents.forEach((agent: any) => {
+    agents.forEach((agent) => {
       const chainId = agent.chainId;
       const agentIdNum = parseInt(agent.agentId, 10);
       
@@ -146,12 +170,12 @@ export async function GET() {
     
     // Convert to array and sort by chainId
     const topAgents = Object.values(topAgentsByChain)
-      .map((agent: any) => ({
+      .map((agent) => ({
         chainId: agent.chainId,
         chainName: getChainName(agent.chainId),
         agentId: agent.agentId,
         agentName: agent.agentName || 'Unnamed',
-        ensName: agent.ensEndpoint || null
+        ensName: agent.ensEndpoint || null,
       }))
       .sort((a, b) => a.chainId - b.chainId);
 
@@ -190,10 +214,11 @@ export async function GET() {
           recentCount: c.recentCount
         }))
       },
-      topAgents
+      topAgents,
     });
-  } catch (e: any) {
-    console.error('Stats API error:', e);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : JSON.stringify(e);
+    console.error('Stats API error:', message);
     // Return empty stats on error to prevent site crash
     return NextResponse.json({
       summary: {

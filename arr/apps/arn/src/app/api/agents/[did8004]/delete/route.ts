@@ -22,13 +22,16 @@ export async function DELETE(
 ) {
   try {
     const client = await getAgenticTrustClient();
-    const adminAgents = client.agents.admin as any;
+    const adminAgents = client.agents.admin as {
+      deleteAgentByDid?: (did: string) => Promise<{ txHash: string }>;
+      deleteAgent: (args: { agentId: string; chainId: number }) => Promise<{ txHash: string }>;
+    };
     const deleteFn =
       typeof adminAgents.deleteAgentByDid === 'function'
         ? adminAgents.deleteAgentByDid.bind(adminAgents)
         : async (did: string) => {
             const parsed = parseDid8004(did);
-            return client.agents.admin.deleteAgent({
+            return adminAgents.deleteAgent({
               agentId: parsed.agentId,
               chainId: parsed.chainId,
             });

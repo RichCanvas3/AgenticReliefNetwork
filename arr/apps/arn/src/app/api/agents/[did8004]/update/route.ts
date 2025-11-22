@@ -48,13 +48,35 @@ export async function PUT(
     const client = await getAgenticTrustClient();
 
     // Update agent using admin API
-    const adminAgents = client.agents.admin as any;
+    const adminAgents = client.agents.admin as {
+      updateAgentByDid?: (
+        did: string,
+        options: {
+          chainId: number;
+          tokenURI?: string;
+          metadata?: Array<{ key: string; value: string }>;
+        },
+      ) => Promise<{ txHash: string }>;
+      updateAgent: (args: {
+        agentId: string;
+        chainId: number;
+        tokenURI?: string;
+        metadata?: Array<{ key: string; value: string }>;
+      }) => Promise<{ txHash: string }>;
+    };
     const updateFn =
       typeof adminAgents.updateAgentByDid === 'function'
         ? adminAgents.updateAgentByDid.bind(adminAgents)
-        : (async (did: string, options: { chainId: number; tokenURI?: string; metadata?: Array<{ key: string; value: string }> }) => {
+        : (async (
+            did: string,
+            options: {
+              chainId: number;
+              tokenURI?: string;
+              metadata?: Array<{ key: string; value: string }>;
+            },
+          ) => {
             const parsedDid = parseDid8004(did);
-            return client.agents.admin.updateAgent({
+            return adminAgents.updateAgent({
               agentId: parsedDid.agentId,
               chainId: options.chainId,
               tokenURI: options.tokenURI,

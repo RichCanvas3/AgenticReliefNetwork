@@ -64,25 +64,29 @@ export async function GET(
         limit,
         offset,
       }),
-      client.getReputationSummary({
-        agentId: parsed.agentId,
-        chainId: parsed.chainId,
-      }).catch((error: unknown) => {
-        console.warn(
-          '[agents/[did:8004]/feedback] getReputationSummary failed:',
-          error,
-        );
-        return null;
-      }),
+      client
+        .getReputationSummary({
+          agentId: parsed.agentId,
+          chainId: parsed.chainId,
+        })
+        .catch((error: unknown) => {
+          console.warn(
+            '[agents/[did:8004]/feedback] getReputationSummary failed:',
+            error,
+          );
+          return null;
+        }),
     ]);
 
     console.info("feedback", JSON.stringify(feedback, null, 2));
 
+    type ReputationSummary = { count: bigint; averageScore: number };
+
     const normalizedSummary =
-      summary && typeof (summary as any).count === 'bigint'
+      summary && typeof (summary as ReputationSummary).count === 'bigint'
         ? {
-            count: (summary as any).count.toString(),
-            averageScore: (summary as any).averageScore,
+            count: (summary as ReputationSummary).count.toString(),
+            averageScore: (summary as ReputationSummary).averageScore,
           }
         : summary;
 

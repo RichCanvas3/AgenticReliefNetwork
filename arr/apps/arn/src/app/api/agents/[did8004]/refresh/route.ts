@@ -40,7 +40,7 @@ export async function POST(
         typeof body.chainId === 'number' && Number.isFinite(body.chainId)
           ? body.chainId
           : undefined;
-    } catch (error) {
+    } catch {
       chainIdOverride = undefined;
     }
 
