@@ -1,25 +1,24 @@
 {
   "name": "@my-scope/arn",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
-  "description": "ARN Next.js app (App Router) in the ARR monorepo",
-  "license": "MIT",
+  "description": "ARN Next.js app in the arr monorepo.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext ts,tsx,js,jsx"
   },
   "dependencies": {
+    "@agentic-trust/core": "^1.0.17",
     "@agentic-trust/8004-ext-sdk": "^1.0.17",
     "@agentic-trust/8004-sdk": "^1.0.17",
-    "@agentic-trust/core": "^1.0.17",
     "@agentic-trust/veramo-agent-extension": "^1.0.17",
+    "@metamask/delegation-toolkit": "^0.13.0",
+    "@ethereum-attestation-service/eas-sdk": "^2.7.0",
     "@emotion/cache": "^11.11.3",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.3",
-    "@ethereum-attestation-service/eas-sdk": "^2.7.0",
-    "@metamask/delegation-toolkit": "^0.13.0",
     "@mui/icons-material": "^5.15.17",
     "@mui/material": "^5.15.17",
     "@veramo/core": "^6.0.0",
@@ -39,11 +38,14 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "eslint": "^8.57.0",
-    "typescript": "^5.5.0"
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18.17.0"
   }
 }
 

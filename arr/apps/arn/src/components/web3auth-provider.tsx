@@ -1,22 +1,23 @@
 "use client";
 
-import React from "react";
-import { Web3Auth } from "@web3auth/modal";
-import { CHAIN_NAMESPACES } from "@web3auth/base";
-import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider";
+import * as React from "react";
+import type { Web3Auth } from "@web3auth/modal";
 
-type Web3AuthUserInfo = {
-  name?: string | null;
-  email?: string | null;
-};
+export interface Web3AuthProfile {
+  name: string | null;
+  email: string | null;
+}
 
-type Web3AuthContextValue = {
+interface Web3AuthContextValue {
+  web3auth: Web3Auth | null;
   isInitializing: boolean;
+  error: string | null;
   isConnected: boolean;
-  userInfo: Web3AuthUserInfo | null;
-  connect: () => Promise<void>;
+  userInfo: Web3AuthProfile | null;
+  connect: () => Promise<boolean>;
   logout: () => Promise<void>;
-};
+  getUserInfo: () => Promise<Web3AuthProfile | null>;
+}
 
 const Web3AuthContext = React.createContext<Web3AuthContextValue | undefined>(
   undefined
@@ -27,80 +28,155 @@ export function Web3AuthProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const web3authRef = React.useRef<Web3Auth | null>(null);
-  const [isInitializing, setIsInitializing] = React.useState(false);
-  const [isConnected, setIsConnected] = React.useState(false);
-  const [userInfo, setUserInfo] = React.useState<Web3AuthUserInfo | null>(null);
+  const [web3auth, setWeb3auth] = React.useState<Web3Auth | null>(null);
+  const [isInitializing, setIsInitializing] = React.useState<boolean>(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [isConnected, setIsConnected] = React.useState<boolean>(false);
+  const [userInfo, setUserInfo] = React.useState<Web3AuthProfile | null>(null);
 
-  const ensureInstance = React.useCallback(async () => {
-    if (typeof window === "undefined") return null;
-    if (web3authRef.current) return web3authRef.current;
+  React.useEffect(() => {
+    let cancelled = false;
 
-    const clientId = process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID;
-    if (!clientId) {
-      console.warn("NEXT_PUBLIC_WEB3AUTH_CLIENT_ID is not set");
-      return null;
-    }
+    async function initWeb3Auth() {
+      if (typeof window === "undefined") return;
 
-    setIsInitializing(true);
-    try {
-      const chainConfig = {
-        chainNamespace: CHAIN_NAMESPACES.EIP155,
-        // You can change this to your preferred chain (e.g. Sepolia, Base Sepolia)
-        chainId: "0x1",
-        rpcTarget: "https://rpc.ankr.com/eth"
-      } as const;
-
-      const privateKeyProvider = new EthereumPrivateKeyProvider({
-        config: {
-          chainConfig
+      try {
+        const clientId = process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID;
+        if (!clientId) {
+          setError(
+            "Web3Auth client ID is not configured. Set NEXT_PUBLIC_WEB3AUTH_CLIENT_ID to enable social login."
+          );
+          return;
         }
-      });
 
-      const web3auth = new Web3Auth({
-        clientId,
-        web3AuthNetwork: "sapphire_devnet",
-        privateKeyProvider
-      });
+        const { Web3Auth } = await import("@web3auth/modal");
+        const { OpenloginAdapter } = await import(
+          "@web3auth/openlogin-adapter"
+        );
+        const { EthereumPrivateKeyProvider } = await import(
+          "@web3auth/ethereum-provider"
+        );
+        const { CHAIN_NAMESPACES } = await import("@web3auth/base");
 
-      await web3auth.initModal();
-      web3authRef.current = web3auth;
-      return web3auth;
-    } finally {
-      setIsInitializing(false);
+        const chainIdHex = process.env.NEXT_PUBLIC_CHAIN_ID || "0xaa36a7"; // default Sepolia
+        const rpcUrl =
+          process.env.NEXT_PUBLIC_AGENTIC_TRUST_RPC_URL_SEPOLIA ||
+          "https://rpc.ankr.com/eth_sepolia";
+
+        const chainConfig = {
+          chainNamespace: CHAIN_NAMESPACES.EIP155,
+          chainId: chainIdHex,
+          rpcTarget: rpcUrl,
+          displayName: "EVM Chain",
+          ticker: "ETH",
+          tickerName: "Ethereum",
+          decimals: 18
+        };
+
+        const privateKeyProvider = new EthereumPrivateKeyProvider({
+          config: { chainConfig }
+        });
+
+        const web3authInstance = new Web3Auth({
+          clientId,
+          web3AuthNetwork: "sapphire_devnet",
+          privateKeyProvider
+        });
+
+        const openloginAdapter = new OpenloginAdapter({
+          loginSettings: {
+            mfaLevel: "optional"
+          }
+        });
+
+        web3authInstance.configureAdapter(openloginAdapter);
+        await web3authInstance.initModal();
+
+        if (!cancelled) {
+          setWeb3auth(web3authInstance);
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) {
+          setError("Failed to initialize Web3Auth. Please try again later.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsInitializing(false);
+        }
+      }
     }
+
+    void initWeb3Auth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const normalizeUserInfo = React.useCallback((info: unknown): Web3AuthProfile => {
+    const record = (info ?? {}) as Record<string, unknown>;
+    const nameValue = record.name;
+    const emailValue = record.email;
+    return {
+      name: typeof nameValue === "string" ? nameValue : null,
+      email: typeof emailValue === "string" ? emailValue : null
+    };
   }, []);
 
   const connect = React.useCallback(async () => {
-    const web3auth = await ensureInstance();
-    if (!web3auth) return;
-
+    if (!web3auth) return false;
     const provider = await web3auth.connect();
-    if (!provider) return;
+    if (!provider) return false;
 
-    const info = await web3auth.getUserInfo();
-    setUserInfo({
-      name: info.name ?? null,
-      email: info.email ?? null
-    });
+    try {
+      const rawInfo = await web3auth.getUserInfo();
+      const profile = normalizeUserInfo(rawInfo);
+      setUserInfo(profile);
+    } catch (e) {
+      console.error(e);
+      setUserInfo(null);
+    }
+
     setIsConnected(true);
-  }, [ensureInstance]);
+    return true;
+  }, [normalizeUserInfo, web3auth]);
 
   const logout = React.useCallback(async () => {
-    const web3auth = web3authRef.current;
     if (!web3auth) return;
     await web3auth.logout();
     setIsConnected(false);
     setUserInfo(null);
-  }, []);
+  }, [web3auth]);
 
-  const value: Web3AuthContextValue = {
-    isInitializing,
-    isConnected,
-    userInfo,
-    connect,
-    logout
-  };
+  const getUserInfo = React.useCallback(async () => {
+    if (!web3auth) return null;
+    try {
+      const rawInfo = await web3auth.getUserInfo();
+      const profile = normalizeUserInfo(rawInfo);
+      setUserInfo(profile);
+      setIsConnected(true);
+      return profile;
+    } catch (e) {
+      console.error(e);
+      setUserInfo(null);
+      return null;
+    }
+  }, [normalizeUserInfo, web3auth]);
+
+  const value = React.useMemo(
+    () => ({
+      web3auth,
+      isInitializing,
+      error,
+      isConnected,
+      userInfo,
+      connect,
+      logout,
+      getUserInfo
+    }),
+    [web3auth, isInitializing, error, isConnected, userInfo, connect, logout, getUserInfo]
+  );
 
   return (
     <Web3AuthContext.Provider value={value}>
@@ -116,4 +192,5 @@ export function useWeb3Auth() {
   }
   return ctx;
 }
+
 

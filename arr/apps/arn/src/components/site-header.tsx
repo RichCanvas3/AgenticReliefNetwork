@@ -1,15 +1,48 @@
 "use client";
 
-import Link from "next/link";
-import React from "react";
-import { useWeb3Auth } from "../components/web3auth-provider";
+import { useRouter } from "next/navigation";
+import * as React from "react";
+import { useConnection } from "./connection-context";
+import { useWeb3Auth } from "./web3auth-provider";
 
 export function SiteHeader() {
-  const { isConnected, isInitializing, userInfo, connect, logout } =
-    useWeb3Auth();
+  const router = useRouter();
+  const { user, setUser } = useConnection();
+  const { connect, getUserInfo, logout, web3auth } = useWeb3Auth();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [isConnecting, setIsConnecting] = React.useState(false);
 
-  const displayLabel =
-    userInfo?.name || userInfo?.email || "Connected Account";
+  const handleDisconnect = React.useCallback(async () => {
+    try {
+      await logout();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setUser(null);
+      setIsMenuOpen(false);
+      router.push("/onboarding");
+    }
+  }, [logout, router, setUser]);
+
+  const handleNavigate = React.useCallback(
+    (path: string) => {
+      setIsMenuOpen(false);
+      router.push(path);
+    },
+    [router]
+  );
+
+  const iconBaseStyle: React.CSSProperties = {
+    width: "1.1rem",
+    height: "1.1rem",
+    borderRadius: "9999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "0.65rem",
+    fontWeight: 600,
+    marginRight: "0.5rem"
+  };
 
   return (
     <header
@@ -17,119 +50,245 @@ export function SiteHeader() {
         position: "sticky",
         top: 0,
         zIndex: 20,
-        backdropFilter: "blur(12px)",
-        background: "rgba(15,23,42,0.85)",
-        borderBottom: "1px solid rgba(148,163,184,0.4)"
+        borderBottom: "1px solid rgba(148, 163, 184, 0.4)",
+        backgroundColor: "rgba(15,23,42,0.96)",
+        backdropFilter: "blur(10px)",
+        color: "white"
       }}
     >
       <div
         style={{
-          margin: "0 auto",
           maxWidth: "72rem",
+          margin: "0 auto",
           padding: "0.75rem 1.5rem",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between"
+          justifyContent: "space-between",
+          gap: "1rem"
         }}
       >
-        <Link
-          href="/"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            textDecoration: "none"
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span
             style={{
-              width: "0.75rem",
-              height: "0.75rem",
+              width: "1.75rem",
+              height: "1.75rem",
               borderRadius: "9999px",
               background:
-                "radial-gradient(circle at 30% 30%, #38bdf8, #6366f1 40%, #a855f7)"
+                "radial-gradient(circle at 30% 20%, #38bdf8, #4f46e5 60%, #1d4ed8)",
+              boxShadow:
+                "0 10px 15px -3px rgba(37, 99, 235, 0.7), 0 4px 6px -4px rgba(37, 99, 235, 0.8)"
             }}
           />
-          <span
-            style={{
-              fontSize: "1rem",
-              fontWeight: 600,
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              color: "#e5e7eb"
-            }}
-          >
-            Agentic Relief Network
-          </span>
-        </Link>
+          <div>
+            <span style={{ fontWeight: 600, letterSpacing: "0.03em" }}>
+              Agentic Relief Network
+            </span>
+          </div>
+        </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Link
-            href="/onboarding"
-            style={{
-              fontSize: "0.875rem",
-              color: "#e5e7eb",
-              textDecoration: "none"
-            }}
-          >
-            Register organization
-          </Link>
-
-          {!isConnected ? (
+        <div style={{ fontSize: "0.9rem" }}>
+          {!user ? (
             <button
               type="button"
-              onClick={connect}
-              disabled={isInitializing}
-              style={{
-                fontSize: "0.875rem",
-                padding: "0.35rem 0.9rem",
-                borderRadius: "9999px",
-                border: "1px solid rgba(148,163,184,0.9)",
-                background:
-                  "linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,64,175,0.9))",
-                color: "#e5e7eb",
-                cursor: isInitializing ? "wait" : "pointer"
+              onClick={async () => {
+                if (!web3auth) return;
+                setIsConnecting(true);
+                try {
+                  await connect();
+                  const info = await getUserInfo();
+                  setUser({
+                    name: info?.name ?? "Unknown user",
+                    email: info?.email ?? "unknown@example.com"
+                  });
+                } catch (e) {
+                  console.error(e);
+                } finally {
+                  setIsConnecting(false);
+                }
               }}
+              style={{
+                padding: "0.5rem 1.1rem",
+                borderRadius: "9999px",
+                border: "1px solid rgba(148, 163, 184, 0.9)",
+                color: "white",
+                backgroundColor: "transparent",
+                textDecoration: "none",
+                fontWeight: 500,
+                cursor: !web3auth || isConnecting ? "not-allowed" : "pointer",
+                opacity: !web3auth || isConnecting ? 0.7 : 1
+              }}
+              disabled={!web3auth || isConnecting}
             >
-              {isInitializing ? "Connecting..." : "Connect"}
+              {isConnecting ? "Connecting…" : "Connect"}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={logout}
-              style={{
-                fontSize: "0.875rem",
-                padding: "0.35rem 0.9rem",
-                borderRadius: "9999px",
-                border: "1px solid rgba(34,197,94,0.9)",
-                background:
-                  "linear-gradient(135deg, rgba(21,128,61,0.9), rgba(22,163,74,0.9))",
-                color: "#ecfdf3",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.4rem"
-              }}
-            >
-              <span
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((open) => !open)}
                 style={{
-                  width: "0.45rem",
-                  height: "0.45rem",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.45rem 0.9rem",
                   borderRadius: "9999px",
-                  backgroundColor: "#bbf7d0"
-                }}
-              />
-              <span
-                style={{
-                  maxWidth: "10rem",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis"
+                  border: "1px solid rgba(148, 163, 184, 0.9)",
+                  background:
+                    "linear-gradient(to right, rgba(30,64,175,0.9), rgba(37,99,235,0.9))",
+                  color: "white",
+                  fontWeight: 500,
+                  cursor: "pointer"
                 }}
               >
-                {displayLabel}
-              </span>
-            </button>
+                <span
+                  style={{
+                    maxWidth: "10rem",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    textAlign: "left"
+                  }}
+                >
+                  {user.name || "Account"}
+                </span>
+                <span style={{ fontSize: "0.6rem", opacity: 0.8 }}>
+                  ▼
+                </span>
+              </button>
+
+              {isMenuOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    marginTop: "0.5rem",
+                    minWidth: "13rem",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(15,23,42,0.98)",
+                    border: "1px solid rgba(148, 163, 184, 0.5)",
+                    boxShadow:
+                      "0 10px 25px -8px rgba(15,23,42,0.9), 0 0 0 1px rgba(15,23,42,0.2)",
+                    padding: "0.4rem 0",
+                    backdropFilter: "blur(16px)"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate("/app")}
+                    style={{
+                      width: "100%",
+                      padding: "0.45rem 0.9rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      background: "transparent",
+                      border: "none",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "0.9rem"
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...iconBaseStyle,
+                        background:
+                          "radial-gradient(circle at 30% 20%, #22c55e, #16a34a)"
+                      }}
+                    >
+                      O
+                    </span>
+                    My Organization
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate("/app")}
+                    style={{
+                      width: "100%",
+                      padding: "0.45rem 0.9rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      background: "transparent",
+                      border: "none",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "0.9rem"
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...iconBaseStyle,
+                        background:
+                          "radial-gradient(circle at 30% 20%, #38bdf8, #0ea5e9)"
+                      }}
+                    >
+                      A
+                    </span>
+                    My Alliances
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate("/app")}
+                    style={{
+                      width: "100%",
+                      padding: "0.45rem 0.9rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      background: "transparent",
+                      border: "none",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "0.9rem"
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...iconBaseStyle,
+                        background:
+                          "radial-gradient(circle at 30% 20%, #f97316, #ea580c)"
+                      }}
+                    >
+                      I
+                    </span>
+                    My Initiatives
+                  </button>
+                  <div
+                    style={{
+                      borderTop: "1px solid rgba(51, 65, 85, 0.9)",
+                      margin: "0.25rem 0"
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    style={{
+                      width: "100%",
+                      padding: "0.45rem 0.9rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      background: "transparent",
+                      border: "none",
+                      color: "#fecaca",
+                      cursor: "pointer",
+                      fontSize: "0.9rem"
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...iconBaseStyle,
+                        background:
+                          "radial-gradient(circle at 30% 20%, #f97373, #b91c1c)"
+                      }}
+                    >
+                      ⏻
+                    </span>
+                    Disconnect
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
