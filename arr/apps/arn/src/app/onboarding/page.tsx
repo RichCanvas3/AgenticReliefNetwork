@@ -2,6 +2,24 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  FormControl,
+  FormHelperText,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  TextField,
+  Typography
+} from "@mui/material";
 
 import { useConnection } from "../../components/connection-context";
 import { useWeb3Auth } from "../../components/web3auth-provider";
@@ -10,15 +28,19 @@ import {
   createAgentWithWalletForAA,
   getCounterfactualAAAddressByAgentName
 } from "@agentic-trust/core/client";
-import { keccak256, stringToHex } from "viem";
 import { sepolia } from "viem/chains";
 
+type Eip1193Provider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
 
+declare global {
+  interface Window {
+    ethereum?: Eip1193Provider;
+  }
+}
 
-type OrgType =
-  | "operationalRelief"
-  | "resource"
-  | "alliance";
+type OrgType = "operationalRelief" | "resource" | "alliance";
 
 interface OrgDetails {
   name: string;
@@ -26,7 +48,7 @@ interface OrgDetails {
   type: OrgType | "";
 }
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type StepId = 1 | 2 | 3 | 4 | 5;
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -40,7 +62,7 @@ export default function OnboardingPage() {
     getUserInfo
   } = useWeb3Auth();
 
-  const [step, setStep] = React.useState<Step>(1);
+  const [step, setStep] = React.useState<StepId>(1);
   const [isConnecting, setIsConnecting] = React.useState(false);
   const [isCheckingAvailability, setIsCheckingAvailability] =
     React.useState(false);
@@ -96,14 +118,13 @@ export default function OnboardingPage() {
       }
 
       // Also resolve and store the connected wallet address (EOA) for display.
-      const provider = (web3auth as any)?.provider as
-        | { request: (args: { method: string; params?: any[] }) => Promise<any> }
-        | undefined;
-      if (provider) {
+      const socialProvider = web3auth?.provider as Eip1193Provider | undefined;
+      if (socialProvider) {
         try {
-          const accounts = await provider.request({
+          const socialResult = await socialProvider.request({
             method: "eth_accounts"
           });
+          const accounts = socialResult as string[] | undefined;
           const account = Array.isArray(accounts) && accounts[0];
           if (account && typeof account === "string") {
             setWalletAddress(account);
@@ -206,7 +227,7 @@ export default function OnboardingPage() {
       setLastName("");
       setStep(1);
     }
-  }, [web3auth]);
+  }, [logout, setUser]);
 
   const handleCreateArn = React.useCallback(async () => {
     if (!emailDomain) {
@@ -216,7 +237,7 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (!web3auth || !(web3auth as any).provider) {
+    if (!web3auth || !web3auth.provider) {
       setError(
         "Wallet provider is not available. Please complete the social login step first."
       );
@@ -228,9 +249,9 @@ export default function OnboardingPage() {
 
     try {
       // Resolve an EIP-1193 provider (Web3Auth first, then window.ethereum as fallback).
-      const eip1193Provider =
-        (web3auth as any).provider ??
-        (typeof window !== "undefined" ? (window as any).ethereum : null);
+      const eip1193Provider: Eip1193Provider | null =
+        (web3auth.provider as Eip1193Provider | undefined) ??
+        (typeof window !== "undefined" ? window.ethereum ?? null : null);
 
       if (!eip1193Provider) {
         setError(
@@ -239,14 +260,11 @@ export default function OnboardingPage() {
         return;
       }
 
-      const provider = eip1193Provider as {
-        request: (args: { method: string; params?: any[] }) => Promise<any>;
-      };
-
       // Resolve connected account (EOA) from provider
-      const accounts = await provider.request({
+      const accountsResult = await eip1193Provider.request({
         method: "eth_accounts"
       });
+      const accounts = accountsResult as string[] | undefined;
       const account = Array.isArray(accounts) && accounts[0];
 
       if (!account || typeof account !== "string") {
@@ -270,7 +288,7 @@ export default function OnboardingPage() {
         agentName,
         account as `0x${string}`,
         {
-          ethereumProvider: provider as any,
+          ethereumProvider: eip1193Provider,
           chain: sepolia
         }
       );
@@ -290,19 +308,16 @@ export default function OnboardingPage() {
 
       const ensOrgName = "8004-agent";
 
-      console.info("......... eip1193Provider: ", eip1193Provider);
-
-      const result = await createAgentWithWalletForAA({
+      const createResult = await createAgentWithWalletForAA({
         agentData: {
           agentName,
           agentAccount: agentAccountAddress as `0x${string}`,
-          description: 'arn account',
-          image: 'https://www.google.com',
-          agentUrl: 'https://www.google.com',
+          description: "arn account",
+          image: "https://www.google.com",
+          agentUrl: "https://www.google.com"
         },
         account: account as `0x${string}`,
-        ethereumProvider: eip1193Provider as any,
-
+        ethereumProvider: eip1193Provider,
         useAA: true,
         ensOptions: {
           enabled: true,
@@ -311,25 +326,9 @@ export default function OnboardingPage() {
         chainId: sepolia.id
       });
 
-      console.info("......... result ......... ", result);
-      // After successfully creating the agent AA, create a trust relationship
+      console.info("......... result ......... ", createResult);
+      // TODO: After successfully creating the agent AA, create a trust relationship
       // attestation between the individual's AA and the agent AA.
-      try {
-
-      } catch (e) {
-        console.error(
-          "Failed to create trust relationship attestation for agent:",
-          e
-        );
-      }
-
-
-
-
-
-
-
-
 
       // For the ARN onboarding UI, treat a successful client-side flow as success
       // and use the human-readable agent name as the ARN identifier.
@@ -343,553 +342,375 @@ export default function OnboardingPage() {
     } finally {
       setIsCreatingArn(false);
     }
-  }, [emailDomain, org.name, web3auth]);
+  }, [emailDomain, web3auth]);
 
   const goToAppEnvironment = () => {
     router.push("/app");
   };
 
   return (
-    <main
-      style={{
-        padding: "3rem 2rem",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-        maxWidth: "48rem",
-        margin: "0 auto"
+    <Container
+      maxWidth="md"
+      sx={{
+        py: 6
       }}
     >
-      <header style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
-          Organization Onboarding
-        </h1>
-        <p style={{ maxWidth: "40rem", lineHeight: 1.6 }}>
-          Follow a few simple steps to register your organization, create an
-          ARN Identity, and then continue into the application environment.
-        </p>
-      </header>
+      <Box mb={4}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Organization onboarding
+        </Typography>
+        <Typography variant="body1" color="text.secondary" maxWidth="40rem">
+          Follow these steps to register your organization, create an ARN
+          identity, and continue into the application environment.
+        </Typography>
+      </Box>
 
-      <section
-        style={{
-          marginBottom: "1.5rem",
-          fontSize: "0.9rem",
-          color: "#4b5563"
-        }}
-      >
-        <strong>Step {step} of 5</strong>
-      </section>
+      <Box mb={3}>
+        <Stepper activeStep={step - 1} alternativeLabel>
+          {["Connect", "Your details", "Organization", "ARN identity", "Review"].map(
+            (label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            )
+          )}
+        </Stepper>
+      </Box>
 
       {error && (
-        <div
-          style={{
-            marginBottom: "1.5rem",
-            padding: "0.75rem 1rem",
-            borderRadius: "0.5rem",
-            backgroundColor: "#fef2f2",
-            color: "#991b1b",
-            border: "1px solid #fecaca"
-          }}
-        >
-          {error}
-        </div>
+        <Box mb={3}>
+          <Alert severity="error">{error}</Alert>
+        </Box>
       )}
 
       {step === 1 && (
-        <section
-          style={{
-            padding: "1.75rem 1.5rem",
-            borderRadius: "0.75rem",
-            border: "1px solid rgba(148, 163, 184, 0.6)",
-            backgroundColor: "white"
-          }}
-        >
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>
+        <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
             1. Connect using your social login
-          </h2>
-          <p style={{ marginBottom: "1.25rem", lineHeight: 1.5 }}>
+          </Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
             We use Web3Auth to let you sign in with familiar social providers,
             while also preparing a wallet that can be used for ARN operations.
-          </p>
+          </Typography>
 
           {isInitializing && (
-            <p>Initializing Web3Auth widget, please wait…</p>
+            <Typography variant="body2">Initializing Web3Auth, please wait…</Typography>
           )}
 
           {!isInitializing && !error && (
-            <button
-              type="button"
+            <Button
+              variant="contained"
+              color="primary"
               onClick={handleConnectSocial}
               disabled={!web3auth || isConnecting}
-              style={{
-                padding: "0.75rem 1.5rem",
-                borderRadius: "9999px",
-                border: "none",
-                backgroundColor: "#2563eb",
-                color: "white",
-                fontWeight: 600,
-                cursor: !web3auth || isConnecting ? "not-allowed" : "pointer",
-                opacity: !web3auth || isConnecting ? 0.7 : 1
-              }}
             >
               {isConnecting ? "Connecting…" : "Connect with social login"}
-            </button>
+            </Button>
           )}
-        </section>
+        </Paper>
       )}
 
       {step === 2 && (
-        <section
-          style={{
-            padding: "1.75rem 1.5rem",
-            borderRadius: "0.75rem",
-            border: "1px solid rgba(148, 163, 184, 0.6)",
-            backgroundColor: "white"
-          }}
-        >
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>
+        <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
             2. Your details
-          </h2>
+          </Typography>
 
           {user && (
-            <div style={{ marginBottom: "1.25rem", lineHeight: 1.5 }}>
-              <p>
+            <Box mb={2}>
+              <Typography variant="body2">
                 Email: <strong>{user.email}</strong>
-              </p>
+              </Typography>
               {walletAddress && (
-                <p
-                  style={{
-                    marginTop: "0.25rem",
-                    fontSize: "0.85rem",
-                    color: "#6b7280",
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace"
-                  }}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5, fontFamily: "monospace" }}
                 >
-                  EOA: <span>{walletAddress}</span>
-                </p>
+                  EOA: {walletAddress}
+                </Typography>
               )}
               {aaAddress && (
-                <p
-                  style={{
-                    marginTop: "0.15rem",
-                    fontSize: "0.85rem",
-                    color: "#6b7280",
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace"
-                  }}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.25, fontFamily: "monospace" }}
                 >
-                  AA account: <span>{aaAddress}</span>
-                </p>
+                  AA account: {aaAddress}
+                </Typography>
               )}
-            </div>
+            </Box>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>First name</span>
-              <input
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #cbd5f5"
-                }}
-              />
-            </label>
+          <Stack spacing={2}>
+            <TextField
+              label="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              fullWidth
+              size="small"
+            />
+            <TextField
+              label="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              fullWidth
+              size="small"
+            />
+          </Stack>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>Last name</span>
-              <input
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #cbd5f5"
-                }}
-              />
-            </label>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "1.5rem"
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "9999px",
-                border: "1px solid #cbd5f5",
-                backgroundColor: "white",
-                cursor: "pointer"
-              }}
-            >
+          <Box mt={3} display="flex" justifyContent="space-between">
+            <Button variant="outlined" onClick={() => setStep(1)}>
               Back
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
               onClick={() => setStep(3)}
-              style={{
-                padding: "0.5rem 1.25rem",
-                borderRadius: "9999px",
-                border: "none",
-                backgroundColor: "#2563eb",
-                color: "white",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
             >
               Continue
-            </button>
-          </div>
-        </section>
+            </Button>
+          </Box>
+        </Paper>
       )}
 
       {step === 4 && (
-        <section
-          style={{
-            padding: "1.75rem 1.5rem",
-            borderRadius: "0.75rem",
-            border: "1px solid rgba(148, 163, 184, 0.6)",
-            backgroundColor: "white"
-          }}
-        >
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>
+        <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
             3. Organization details
-          </h2>
+          </Typography>
           {user && (
-            <div style={{ marginBottom: "1rem", lineHeight: 1.5 }}>
-              <p>
+            <Box mb={2}>
+              <Typography variant="body2">
                 Signed in as{" "}
                 <strong>
                   {user.name} ({user.email})
                 </strong>
                 .
-              </p>
+              </Typography>
               {walletAddress && (
-                <p
-                  style={{
-                    marginTop: "0.15rem",
-                    fontSize: "0.8rem",
-                    color: "#6b7280",
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace"
-                  }}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5, fontFamily: "monospace" }}
                 >
-                  Wallet:{" "}
-                  <span>
-                    {walletAddress.slice(0, 6)}...
-                    {walletAddress.slice(-4)}
-                  </span>
-                </p>
+                  Wallet: {walletAddress.slice(0, 6)}...
+                  {walletAddress.slice(-4)}
+                </Typography>
               )}
-            </div>
+            </Box>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>Organization name</span>
-              <input
-                type="text"
+          <Stack spacing={2}>
+            <Box>
+              <TextField
+                label="Organization name"
                 value={org.name}
                 onChange={(e) => handleOrgChange("name", e.target.value)}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #cbd5f5"
-                }}
+                fullWidth
+                size="small"
               />
               {emailDomain && (
-                <span
-                  style={{
-                    marginTop: "0.25rem",
-                    fontSize: "0.8rem",
-                    color: "#6b7280"
-                  }}
-                >
-                  Email domain from your login:{" "}
-                  <strong>{emailDomain}</strong>. This domain should be
-                  associated with this organization.
-                </span>
+                <FormHelperText>
+                  Email domain from your login: <strong>{emailDomain}</strong>. This
+                  domain should be associated with this organization.
+                </FormHelperText>
               )}
-            </label>
+            </Box>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>Organization address</span>
-              <input
-                type="text"
-                value={org.address}
-                onChange={(e) => handleOrgChange("address", e.target.value)}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #cbd5f5"
-                }}
-              />
-            </label>
+            <TextField
+              label="Organization address"
+              value={org.address}
+              onChange={(e) => handleOrgChange("address", e.target.value)}
+              fullWidth
+              size="small"
+            />
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>Organization type</span>
-              <select
+            <FormControl fullWidth size="small">
+              <InputLabel id="org-type-label">Organization type</InputLabel>
+              <Select
+                labelId="org-type-label"
+                label="Organization type"
                 value={org.type}
                 onChange={(e) =>
                   handleOrgChange("type", e.target.value as OrgType | "")
                 }
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #cbd5f5"
-                }}
               >
-                <option value="">Select a type…</option>
-                <option value="operationalRelief">
+                <MenuItem value="">
+                  <em>Select a type…</em>
+                </MenuItem>
+                <MenuItem value="operationalRelief">
                   Operational Relief Organization
-                </option>
-                <option value="resource">Resource Organization</option>
-                <option value="alliance">Alliance Organization</option>
-              </select>
-            </label>
-          </div>
+                </MenuItem>
+                <MenuItem value="resource">Resource Organization</MenuItem>
+                <MenuItem value="alliance">Alliance Organization</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "1.5rem"
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "9999px",
-                border: "1px solid #cbd5f5",
-                backgroundColor: "white",
-                cursor: "pointer"
-              }}
-            >
+          <Box mt={3} display="flex" justifyContent="space-between">
+            <Button variant="outlined" onClick={() => setStep(2)}>
               Back
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
               onClick={handleOrgNext}
               disabled={isCheckingAvailability}
-              style={{
-                padding: "0.5rem 1.25rem",
-                borderRadius: "9999px",
-                border: "none",
-                backgroundColor: "#2563eb",
-                color: "white",
-                fontWeight: 600,
-                cursor: isCheckingAvailability ? "not-allowed" : "pointer",
-                opacity: isCheckingAvailability ? 0.7 : 1
-              }}
             >
-              {isCheckingAvailability ? "Checking availability…" : "Continue"}
-            </button>
-          </div>
+              {isCheckingAvailability
+                ? "Checking availability…"
+                : "Continue"}
+            </Button>
+          </Box>
 
           {emailDomain && (
-            <div
-              style={{
-                marginTop: "1rem",
-                fontSize: "0.8rem",
-                color: "#6b7280"
-              }}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 2 }}
             >
-              <span>
-                If this domain is not associated with the organization name,
-                you can disconnect and choose a different account.
-              </span>
-              <button
-                type="button"
+              If this domain is not associated with the organization name, you can
+              disconnect and choose a different account.{" "}
+              <Button
+                variant="text"
+                size="small"
                 onClick={handleDisconnectAndReset}
-                style={{
-                  marginLeft: "0.5rem",
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  color: "#2563eb",
-                  cursor: "pointer",
-                  textDecoration: "underline"
-                }}
               >
                 Disconnect and use another account
-              </button>
-            </div>
+              </Button>
+            </Typography>
           )}
-        </section>
+        </Paper>
       )}
 
       {step === 3 && (
-        <section
-          style={{
-            padding: "1.75rem 1.5rem",
-            borderRadius: "0.75rem",
-            border: "1px solid rgba(148, 163, 184, 0.6)",
-            backgroundColor: "white"
-          }}
-        >
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>
-            4. Create ARN Identity
-          </h2>
-          <p style={{ marginBottom: "1rem", lineHeight: 1.5 }}>
-            We will create an ARN Identity for this organization. There is no
-            manual review step; anyone can create an ARN Identity.
-          </p>
+        <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            4. Create ARN identity
+          </Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            We will create an ARN identity for this organization. There is no
+            manual review step; anyone can create an ARN identity.
+          </Typography>
 
-          <ul style={{ paddingLeft: "1.25rem", marginBottom: "1.25rem" }}>
+          <Box component="ul" sx={{ pl: 3, mb: 2 }}>
             <li>
-              <strong>Name:</strong> {org.name}
+              <Typography variant="body2">
+                <strong>Name:</strong> {org.name}
+              </Typography>
             </li>
             <li>
-              <strong>Address:</strong> {org.address}
+              <Typography variant="body2">
+                <strong>Address:</strong> {org.address}
+              </Typography>
             </li>
             {emailDomain && (
               <li>
-                <strong>Login email domain:</strong> {emailDomain}
+                <Typography variant="body2">
+                  <strong>Login email domain:</strong> {emailDomain}
+                </Typography>
               </li>
             )}
             <li>
-              <strong>Type:</strong>{" "}
-              {org.type === "operationalRelief"
-                ? "Operational Relief Organization"
-                : org.type === "resource"
-                  ? "Resource Organization"
-                  : "Alliance Organization"}
+              <Typography variant="body2">
+                <strong>Type:</strong>{" "}
+                {org.type === "operationalRelief"
+                  ? "Operational Relief Organization"
+                  : org.type === "resource"
+                    ? "Resource Organization"
+                    : "Alliance Organization"}
+              </Typography>
             </li>
-          </ul>
+          </Box>
 
-          <p style={{ marginBottom: "1.5rem" }}>
-            Is it OK to create an ARN Identity for this organization now?
-          </p>
+          <Typography variant="body2" mb={3}>
+            Is it okay to create an ARN identity for this organization now?
+          </Typography>
 
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "9999px",
-                border: "1px solid #cbd5f5",
-                backgroundColor: "white",
-                cursor: "pointer"
-              }}
-            >
+          <Stack direction="row" spacing={2}>
+            <Button variant="outlined" onClick={() => setStep(3)}>
               Go back
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
               onClick={handleCreateArn}
               disabled={isCreatingArn}
-              style={{
-                padding: "0.5rem 1.25rem",
-                borderRadius: "9999px",
-                border: "none",
-                backgroundColor: "#16a34a",
-                color: "white",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
             >
-              {isCreatingArn ? "Creating ARN Identity…" : "Yes, create ARN Identity"}
-            </button>
-          </div>
+              {isCreatingArn
+                ? "Creating ARN identity…"
+                : "Yes, create ARN identity"}
+            </Button>
+          </Stack>
 
           {emailDomain && (
-            <p
-              style={{
-                marginTop: "1rem",
-                fontSize: "0.85rem",
-                color: "#4b5563"
-              }}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 2 }}
             >
-              If this email domain is not associated with the organization,
-              you can{" "}
-              <button
-                type="button"
+              If this email domain is not associated with the organization, you
+              can{" "}
+              <Button
+                variant="text"
+                size="small"
                 onClick={handleDisconnectAndReset}
-                style={{
-                  padding: 0,
-                  border: "none",
-                  background: "none",
-                  color: "#2563eb",
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  fontSize: "0.85rem"
-                }}
               >
                 disconnect and sign in with a different account
-              </button>{" "}
-              before creating the ARN Identity.
-            </p>
+              </Button>{" "}
+              before creating the ARN identity.
+            </Typography>
           )}
-        </section>
+        </Paper>
       )}
 
       {step === 5 && arn && (
-        <section
-          style={{
-            padding: "1.75rem 1.5rem",
-            borderRadius: "0.75rem",
-            border: "1px solid rgba(34, 197, 94, 0.7)",
-            background:
-              "linear-gradient(to bottom right, rgba(22,163,74,0.08), rgba(22,163,74,0.02))"
+        <Paper
+          elevation={1}
+          sx={{
+            p: 3,
+            mb: 3,
+            borderColor: "success.light"
           }}
         >
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>
-            5. Your ARN Identity
-          </h2>
+          <Typography variant="h6" gutterBottom>
+            5. Your ARN identity
+          </Typography>
 
-          <p style={{ marginBottom: "1rem", lineHeight: 1.5 }}>
-            The ARN Identity for{" "}
-            <strong>{org.name || "your organization"}</strong> has been
-            created.
-          </p>
+          <Typography variant="body2" mb={2}>
+            The ARN identity for{" "}
+            <strong>{org.name || "your organization"}</strong> has been created.
+          </Typography>
 
-          <div
-            style={{
-              padding: "0.85rem 1rem",
-              borderRadius: "0.5rem",
-              backgroundColor: "white",
-              border: "1px dashed rgba(34, 197, 94, 0.7)",
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace"
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: 1,
+              bgcolor: "background.paper",
+              border: "1px dashed",
+              borderColor: "success.light",
+              fontFamily: "monospace"
             }}
           >
             {arn}
-          </div>
+          </Box>
 
-          <p style={{ marginTop: "1.25rem", marginBottom: "1.25rem" }}>
-            Next, you&apos;ll move into the application environment where we
-            manage operations, resources, and alliances using this ARN.
-          </p>
+          <Typography variant="body2" mt={3} mb={3}>
+            Next, you&apos;ll move into the application environment where we manage
+            operations, resources, and alliances using this ARN.
+          </Typography>
 
-          <button
-            type="button"
+          <Button
+            variant="contained"
+            color="primary"
             onClick={goToAppEnvironment}
-            style={{
-              padding: "0.6rem 1.35rem",
-              borderRadius: "9999px",
-              border: "none",
-              backgroundColor: "#2563eb",
-              color: "white",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
           >
             Go to application environment
-          </button>
-        </section>
+          </Button>
+        </Paper>
       )}
-    </main>
+    </Container>
   );
 }
 
