@@ -1,0 +1,70 @@
+{
+  "name": "@my-scope/core",
+  "version": "0.1.0",
+  "description": "Core React + TypeScript UI primitives for the ARR monorepo",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "dev": "tsup --config tsup.config.ts --watch",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "@agentic-trust/8004-ext-sdk": "^1.0.17",
+    "@agentic-trust/8004-sdk": "^1.0.17",
+    "@agentic-trust/core": "^1.0.17",
+    "@agentic-trust/veramo-agent-extension": "^1.0.17",
+    "@emotion/cache": "^11.11.3",
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.3",
+    "@ethereum-attestation-service/eas-sdk": "^2.7.0",
+    "@metamask/delegation-toolkit": "^0.13.0",
+    "@mui/icons-material": "^5.15.17",
+    "@mui/material": "^5.15.17",
+    "@veramo/core": "^6.0.0",
+    "@veramo/did-manager": "^6.0.0",
+    "@veramo/did-resolver": "^6.0.0",
+    "@veramo/key-manager": "^6.0.0",
+    "@web3auth/base": "^8.12.4",
+    "@web3auth/ethereum-provider": "^8.12.4",
+    "@web3auth/metamask-adapter": "^8.12.4",
+    "@web3auth/modal": "^8.12.4",
+    "@web3auth/openlogin-adapter": "^8.12.4",
+    "did-resolver": "^4.1.0",
+    "ethr-did-resolver": "^9.0.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "jsdom": "^26.0.0",
+    "prettier": "^3.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}
+
+
